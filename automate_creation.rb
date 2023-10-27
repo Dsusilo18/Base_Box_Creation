@@ -2,28 +2,18 @@ require 'net/ssh'
 require 'parseconfig'
 require './display'
 require './dependency'
+require './vagrantfile_setup'
 
 config = ParseConfig.new('config.conf')
 prompt = Display.new()
 check_dep = Dependency.new()
+vagfile = Vagrantfile.new()
 create_box = false
 update_found = false
 
 check_dep.check_dependency
-
-vagrantfile_content = "Vagrant.configure(\"2\") do |config|\n"
-vagrantfile_content << "    config.vm.box = \"#{config["vm_box"]}\"\n" unless config["vm_box"].eql? ''
-vagrantfile_content << "    config.vm.box_version = \"#{config["vm_box_version"]}\"\n" unless config["vm_box_version"].eql? ''
-vagrantfile_content << "    config.vm.box_url = \"#{config["vm_box_url"]}\"\n" unless config["vm_box_url"].eql? ''
-vagrantfile_content << "    config.vm.provider 'parallels' do |prl|\n       prl.linked_clone = #{config["linked_clone"]}\n    end\n" unless config["linked_clone"].eql? ''
-vagrantfile_content << "end"
-
-vagrantfile_path = "Vagrantfile"
-
-File.open(vagrantfile_path, "w") { |file| file.write(vagrantfile_content)}
-
-system('cat vagrantfile')
-system('vagrant up')
+vagfile.create_file
+vagfile.start_file
 
 ssh_config_output = `vagrant ssh-config`
 vm_ip = ssh_config_output.scan(/\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/)
@@ -76,9 +66,8 @@ while should_continue
     end
 end
 
-create_box = prompt.make_box_prompt(config)
-
-system('vagrant halt')
-system("vagrant package --output \"#{config["base_box_name"]}.box\"") unless create_box == false
-system('vagrant destroy -f')
-
+if prompt.make_box_prompt(config['base_box_name'])
+    vagfile.create_box(config['base_box_name'])
+else
+    vagfile.end_file
+end
